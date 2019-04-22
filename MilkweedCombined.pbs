@@ -1,0 +1,215 @@
+#!/bin/sh -l
+#PBS -l nodes=1:ppn=1
+#PBS -l walltime=10:00:00
+#PBS -N MilkweedCombined
+#PBS -q microbiome
+
+module load bioinfo
+module load Qiime/2-2019.1
+module list
+
+cd $PBS_O_WORKDIR
+pwd
+
+###Importing sequences###
+qiime tools import \
+--type 'SampleData[PairedEndSequencesWithQuality]' \
+--input-path Milkweed_microbiome_preliminary_data \
+--input-format CasavaOneEightSingleLanePerSampleDirFmt \
+--output-path demux-paired-milkweed-combined.qza \
+
+###Sequence QC and feature establishment###
+qiime dada2 denoise-paired \
+--i-demultiplexed-seqs demux-paired-milkweed-combined.qza \
+--p-trim-left-f 15 \
+--p-trim-left-r 15 \
+--p-trunc-len-f 235 \
+--p-trunc-len-r 235 \
+--o-table milkweed-combined-table.qza \
+--p-chimera-method consensus \
+--o-representative-sequences milkweed-combined-rep-seqs.qza \
+--o-denoising-stats milkweed-combined-denoising-stats.qza \
+
+qiime feature-table summarize \
+--i-table milkweed-combined-table.qza \
+--o-visualization milkweed-combined-summarize.qzv \
+--m-sample-metadata-file Milkweed_prelim_metadata.tsv \
+
+qiime feature-table tabulate-seqs \
+--i-data milkweed-combined-rep-seqs.qza \
+--o-visualization milkweed-combined-rep-seqs-tabulate-seqs.qzv \
+
+qiime metadata tabulate \
+--m-input-file milkweed-combined-denoising-stats.qza \
+--o-visualization milkweed-combined-denoising-stats-tabulate.qzv \
+
+
+
+
+###Assigning features Taxonomy###
+qiime feature-classifier classify-sklearn \
+--i-classifier Silva132-16S-99-consensus-7lvl-classifier.qza \
+--i-reads milkweed-combined-rep-seqs.qza \
+--o-classification milkweed-combined-taxonomy.qza \
+
+
+
+###Quick aside removing the taxonomy without spaces***
+qiime tools export \
+--input-path  milkweed-combined-taxonomy.qza \
+--output-path milkweed-combined-taxonomy-with-spaces \
+
+
+qiime metadata tabulate \
+--m-input-file milkweed-combined-taxonomy-with-spaces/taxonomy.tsv \
+--o-visualization milkweed-combined-taxonomy-as-metadata.qzv \
+
+
+qiime tools export \
+--input-path milkweed-combined-taxonomy-as-metadata.qzv \
+--output-path milkweed-combined-taxonomy-as-metadata \
+
+
+qiime tools import \
+--type 'FeatureData[Taxonomy]' \
+--input-path milkweed-combined-taxonomy-as-metadata/metadata.tsv \
+--output-path milkweed-combined-taxonomy-without-spaces.qza \
+*********************************************************************
+
+
+
+
+qiime metadata tabulate \
+--m-input-file milkweed-combined-taxonomy-without-spaces.qza \
+--o-visualization milkweed-combined-taxonomy-tabulate.qzv \
+
+qiime taxa barplot \
+--i-table milkweed-combined-table.qza \
+--i-taxonomy milkweed-combined-taxonomy-without-spaces.qza \
+--m-metadata-file Milkweed_prelim_metadata.tsv \
+--o-visualization milkweed-combined-taxa-bar-plots.qzv \
+
+
+
+
+
+###Filtered feature table with no mitochondria or chloroplast###
+qiime taxa filter-table \
+--i-table milkweed-combined-table.qza \
+--i-taxonomy milkweed-combined-taxonomy-without-spaces.qza \
+--p-exclude Mitochondria,Chloroplast \
+--o-filtered-table milkweed-combined-no-mitochondria-no-chloroplast-table.qza \
+
+qiime metadata tabulate \
+--m-input-file milkweed-combined-no-mitochondria-no-chloroplast-table.qza \
+--o-visualization milkweed-combined-no-mitochondria-no-chloroplast-table-tabulate.qzv \
+
+qiime taxa barplot \
+--i-table milkweed-combined-no-mitochondria-no-chloroplast-table.qza \
+--i-taxonomy milkweed-combined-taxonomy-without-spaces.qza \
+--m-metadata-file Milkweed_prelim_metadata.tsv \
+--o-visualization milkweed-combined-no-mitochondria-no-chloroplast-taxa-bar-plots.qzv \
+
+qiime feature-table summarize \
+--i-table milkweed-combined-no-mitochondria-no-chloroplast-table.qza \
+--o-visualization milkweed-combined-no-mitochondria-no-chloroplast-summarize.qzv \
+--m-sample-metadata-file Milkweed_prelim_metadata.tsv \
+
+
+
+
+
+###Filtered feature table with no Buchnera(Potential contaminent)###
+qiime taxa filter-table \
+--i-table milkweed-combined-no-mitochondria-no-chloroplast-table.qza \
+--i-taxonomy milkweed-combined-taxonomy-without-spaces.qza \
+--p-exclude Buchnera \
+--o-filtered-table milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-table.qza \
+
+qiime metadata tabulate \
+--m-input-file milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-table.qza \
+--o-visualization milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-table-tabulate.qzv \
+
+qiime taxa barplot \
+--i-table milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-table.qza \
+--i-taxonomy milkweed-combined-taxonomy-without-spaces.qza \
+--m-metadata-file Milkweed_prelim_metadata.tsv \
+--o-visualization milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-taxa-bar-plots.qzv \
+
+qiime feature-table summarize \
+--i-table milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-table.qza \
+--o-visualization milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-summarize.qzv \
+--m-sample-metadata-file Milkweed_prelim_metadata.tsv \ 
+
+
+
+
+###Removing Ambigous features###
+qiime taxa filter-table \
+--i-table milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-table.qza \
+--i-taxonomy milkweed-combined-taxonomy-without-spaces.qza \
+--p-include D_1__ \
+--o-filtered-table milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-no-ambigous-table.qza \
+
+qiime taxa filter-table \
+--i-table milkweed-combined-no-mitochondria-no-chloroplast-no-buchnera-no-ambigous-table.qza \
+--i-taxonomy milkweed-combined-taxonomy-without-spaces.qza \
+--p-exclude Archaea \
+--o-filtered-table milkweed-combined-completely-filtered-table.qza \
+
+
+
+qiime metadata tabulate \
+--m-input-file milkweed-combined-completely-filtered-table.qza \
+--o-visualization milkweed-combined-completely-filtered-table-tabulate.qzv \
+
+qiime taxa barplot \
+--i-table milkweed-combined-completely-filtered-table.qza \
+--i-taxonomy milkweed-combined-taxonomy-without-spaces.qza \
+--m-metadata-file Milkweed_prelim_metadata.tsv \
+--o-visualization milkweed-combined-completely-filtered-taxa-bar-plots.qzv \
+
+qiime feature-table summarize \
+--i-table milkweed-combined-completely-filtered-table.qza \
+--o-visualization milkweed-combined-completely-filtered-table-summarize.qzv \
+--m-sample-metadata-file Milkweed_prelim_metadata.tsv \
+
+
+
+
+
+
+
+###Phylogeny tree building####
+qiime phylogeny align-to-tree-mafft-fasttree \
+--i-sequences milkweed-combined-rep-seqs.qza \
+--o-alignment milkweed-combined-aligned-rep-seqs.qza \
+--o-masked-alignment milkweed-combined-masked-aligned-rep-seqs.qza \
+--o-tree milkweed-combined-unrooted-tree.qza \
+--o-rooted-tree milkweed-combined-rooted-tree.qza \
+
+
+
+
+**************************
+***Exporting data for R***
+**************************
+qiime tools export \
+--input-path milkweed-combined-taxonomy-without-spaces.qza \ 
+--output-path exported-data-for-R/milkweed-combined-taxonomy \
+
+qiime tools export \
+--input-path milkweed-combined-completely-filtered-table.qza \
+--output-path exported-data-for-R/milkweed-combined-completely-filtered-table \
+
+qiime tools export \ 
+--input-path milkweed-combined-aligned-rep-seqs.qza \ 
+--output-path exported-data-for-R/milkweed-combined-aligned-rep-seqs \
+
+qiime tools export \
+--input-path  milkweed-combined-rep-seqs.qza \
+--output-path exported-data-for-R/milkweed-combined-rep-seqs \
+
+qiime tools export \
+--input-path milkweed-combined-rooted-tree.qza \
+--output-path exported-data-for-R/milkweed-combined-rooted-tree \

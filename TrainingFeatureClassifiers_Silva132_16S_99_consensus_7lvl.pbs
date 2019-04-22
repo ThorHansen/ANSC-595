@@ -1,0 +1,44 @@
+#!/bin/sh -l
+#PBS -l nodes=1:ppn=2
+#PBS -l walltime=04:00:00
+#PBS -N ClassifierSilva132-16S-97
+#PBS -q microbiome
+
+module load bioinfo
+module load Qiime/2-2019.1
+module list
+
+cd $PBS_O_WORKDIR
+pwd
+
+
+
+qiime tools import \
+--type 'FeatureData[Sequence]' \
+--input-path SILVA_132_QIIME_release/rep_set/rep_set_16S_only/99/silva_132_99_16S.fna \
+--output-path Silva132-16S-99-rep-seqs.qza \
+
+
+qiime tools import \
+--type 'FeatureData[Taxonomy]' \
+--input-format HeaderlessTSVTaxonomyFormat \
+--input-path SILVA_132_QIIME_release/taxonomy/16S_only/99/consensus_taxonomy_7_levels.txt \
+--output-path Silva132-16S-99-consensus-7lvl-ref-taxonomy.qza \
+
+
+qiime feature-classifier extract-reads \
+--i-sequences Silva132-16S-99-rep-seqs.qza \
+--p-f-primer GTGYCAGCMGCCGCGGTAA \
+--p-r-primer GGACTACNVGGGTWTCTAAT \
+--p-trunc-len 410 \
+--p-min-length 220 \
+--p-max-length 420 \
+--o-reads Silva132-16S-99-extract-ref-seqs.qza \
+
+
+qiime feature-classifier fit-classifier-naive-bayes \
+--i-reference-reads Silva132-16S-99-extract-ref-seqs.qza \
+--i-reference-taxonomy Silva132-16S-99-consensus-7lvl-ref-taxonomy.qza \
+--o-classifier Silva132-16S-99-consensus-7lvl-classifier.qza
+
+
